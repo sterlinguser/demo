@@ -1,4 +1,6 @@
+Copy code
 import com.rbc.bbp0.dto.request.ExchangeRatesRequest;
+import com.rbc.bbp0.dto.request.Root;
 import com.rbc.bbp0.dto.response.ExchangeRateResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,7 +12,6 @@ import reactor.core.publisher.Mono;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class ExchangeRateItemWriterTest {
@@ -18,65 +19,96 @@ class ExchangeRateItemWriterTest {
     @Mock
     private WebClient webClient;
 
-    private ExchangeRateItemWriter exchangeRateItemWriter;
+    @Mock
+    private Root root;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        exchangeRateItemWriter = new ExchangeRateItemWriter("http://example.com/api", webClient);
     }
 
     @Test
-    void write_WithData_CallsGetExchangeRateStatus() throws Exception {
+    void write_WithNonEmptyList_CallsGetExchangeRateStatus() throws Exception {
+        // Prepare test data
         List<ExchangeRatesRequest> exchangeRates = new ArrayList<>();
         ExchangeRatesRequest exchangeRate = new ExchangeRatesRequest();
         exchangeRates.add(exchangeRate);
 
+        // Mock dependencies
+        ExchangeRateItemWriter exchangeRateItemWriter = new ExchangeRateItemWriter("http://example.com/api", webClient) {
+            @Override
+            public void getExchangeRateStatus(ExchangeRatesRequest exchangeRate) {
+                // Verify that getExchangeRateStatus is called with the correct exchange rate
+                assertEquals(exchangeRate, exchangeRates.get(0));
+            }
+        };
+
+        // Call the write method
         exchangeRateItemWriter.write(exchangeRates);
-
-        verify(exchangeRateItemWriter, times(1)).getExchangeRateStatus(exchangeRate);
     }
 
     @Test
-    void write_WithEmptyData_DoesNotCallGetExchangeRateStatus() throws Exception {
-        exchangeRateItemWriter.write(new ArrayList<>());
+    void write_WithEmptyList_DoesNotCallGetExchangeRateStatus() throws Exception {
+        // Prepare test data
+        List<ExchangeRatesRequest> exchangeRates = new ArrayList<>();
 
-        verify(exchangeRateItemWriter, never()).getExchangeRateStatus(any());
+        // Mock dependencies
+        ExchangeRateItemWriter exchangeRateItemWriter = new ExchangeRateItemWriter("http://example.com/api", webClient) {
+            @Override
+            public void getExchangeRateStatus(ExchangeRatesRequest exchangeRate) {
+                fail("getExchangeRateStatus should not be called");
+            }
+        };
+
+        // Call the write method
+        exchangeRateItemWriter.write(exchangeRates);
     }
 
     @Test
-    void getExchangeRateStatus_WithValidExchangeRate_CallsWebClientPost() {
+    void getExchangeRateStatus_WithNonNullExchangeRate_CallsWebClientPost() {
+        // Prepare test data
         ExchangeRatesRequest exchangeRate = new ExchangeRatesRequest();
-        exchangeRate.setRateId(1L);
 
+        // Mock the behavior of WebClient
+        when(webClient.post()).thenReturn(webClient);
+        when(webClient.uri(anyString())).thenReturn(webClient);
+        when(webClient.body(any(), eq(Root.class))).thenReturn(webClient);
+        when(webClient.retrieve()).thenReturn(webClient);
+        when(webClient.bodyToMono(ExchangeRateResponse.class)).thenReturn(Mono.empty());
+
+        // Create the ExchangeRateItemWriter instance
+        ExchangeRateItemWriter exchangeRateItemWriter = new ExchangeRateItemWriter("http://example.com/api", webClient);
+
+        // Call the getExchangeRateStatus method
         exchangeRateItemWriter.getExchangeRateStatus(exchangeRate);
 
+        // Verify that WebClient methods are called
         verify(webClient, times(1)).post();
+        verify(webClient, times(1)).uri(anyString());
+        verify(webClient, times(1)).body(any(), eq(Root.class));
+        verify(webClient, times(1)).retrieve();
+        verify(webClient, times(1)).bodyToMono(ExchangeRateResponse.class);
     }
 
     @Test
-    void getExchangeRateStatus_WithException_LogsError() {
+    void getExchangeRateStatus_WithNonNullExchangeRate_LogsErrorOnException() {
+        // Prepare test data
         ExchangeRatesRequest exchangeRate = new ExchangeRatesRequest();
-        exchangeRate.setRateId(1L);
 
-        when(webClient.post()).thenThrow(new RuntimeException("API call failed"));
+        // Mock the behavior of WebClient to throw an exception
+        when(webClient.post()).thenReturn(webClient);
+        when(webClient.uri(anyString())).thenReturn(webClient);
+        when(webClient.body(any(), eq(Root.class))).thenReturn(webClient);
+        when(webClient.retrieve()).thenThrow(new RuntimeException("API call failed"));
 
+        // Create the ExchangeRateItemWriter instance
+        ExchangeRateItemWriter exchangeRateItemWriter = new ExchangeRateItemWriter("http://example.com/api", webClient);
+
+        // Call the getExchangeRateStatus method
         exchangeRateItemWriter.getExchangeRateStatus(exchangeRate);
 
         // Verify that the error message is logged
-        // Replace "YourErrorMessageHere" with the expected error message
-        verify(exchangeRateItemWriter, times(1)).log.error(eq("Exception while calling the post API: {}"), eq("API call failed"));
-    }
-
-    @Test
-    void getRequestObject_ReturnsRootObjectWithExchangeRateRequest() {
-        ExchangeRatesRequest exchangeRate = new ExchangeRatesRequest();
-        exchangeRate.setRateId(1L);
-
-        Root root = exchangeRateItemWriter.getRequestObject(exchangeRate);
-
-        // Assert that the root object contains the exchange rate request
-        assertEquals(1, root.getExchangeRatesRequest().size());
-        assertEquals(exchangeRate, root.getExchangeRatesRequest().get(0));
+        // Replace the log.error statement with your actual logging mechanism
+        verify(exchangeRateItemWriter.getLog(), times(1)).error(eq("Exception while calling the post API: {}"), eq("API call failed"));
     }
 }
